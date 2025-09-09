@@ -1,0 +1,22 @@
+version: "3.8"
+services:
+  # server:
+  #   build: .
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - .:/app
+  #   environment:
+  #     - PORT=8000
+  #     - NODE_ENV=development
+  #   depends_on:
+  #     - valkey
+  valkey:
+    image: valkey/valkey:latest
+    ports:
+      - "6379:6379"
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
