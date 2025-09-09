@@ -1,8 +1,9 @@
 
 "use client";
 import { useRef, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { FiTrash2 } from "react-icons/fi";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
 type Message = {
@@ -11,6 +12,7 @@ type Message = {
 };
 
 export default function Home() {
+  const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
@@ -149,7 +151,15 @@ export default function Home() {
                       <span className="whitespace-pre-line text-blue-200 bg-zinc-700 rounded-lg px-4 py-2">{msg.content}</span>
                     </div>
                     <Avatar>
-                      <AvatarFallback className="bg-gray-600">U</AvatarFallback>
+                      {user?.imageUrl ? (
+                        <AvatarImage src={user.imageUrl} alt={user.fullName || "User"} />
+                      ) : (
+                        <AvatarFallback className="bg-blue-600 text-white text-lg">
+                          {user?.fullName
+                            ? user.fullName.split(" ").map(n => n[0]).join("")
+                            : "U"}
+                        </AvatarFallback>
+                      )}
                     </Avatar>
                   </li>
                 ) : (
