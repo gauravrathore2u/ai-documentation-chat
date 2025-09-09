@@ -6,8 +6,7 @@ import multer from "multer";
 import { Queue } from "bullmq";
 import fs from "fs";
 import path from "path";
-import { QdrantVectorStore } from "@langchain/qdrant";
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { createEmbeddings, createVectorStore, deleteFile } from "./utils.js";
 import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
@@ -61,13 +60,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       file: uploadedFile,
     });
   } catch (err) {
-    if (uploadedFile && uploadedFile.path) {
-      fs.unlink(uploadedFile.path, (err) => {
-        if (err) {
-          console.error("Error deleting file:", err);
-        }
-      });
-    }
+    deleteFile(uploadedFile?.path);
     res
       .status(500)
       .json({ error: "Error processing file", details: err.message });
@@ -76,20 +69,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
 app.post("/chat", async (req, res) => {
   const userQuery = req.body.query;
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    apiKey: process.env.GEMINI_API_KEY,
-    model: "text-embedding-004",
-  });
-  const vectorStore = await QdrantVectorStore.fromExistingCollection(
-    embeddings,
-    {
-      url: process.env.QDRANT_URL,
-      collectionName: "pdf-docs",
-    }
-  );
-  const retriever = vectorStore.asRetriever({
-    k: 3,
-  });
+  const embeddings = createEmbeddings();
+  const vectorStore = await createVectorStore(embeddings);
+  const retriever = vectorStore.asRetriever({ k: 3 });
   const retrieverResponse = await retriever.invoke(userQuery);
 
   const SYSTEM_PROMPT = `

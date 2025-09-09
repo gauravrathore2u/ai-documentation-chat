@@ -1,9 +1,8 @@
 import { Worker } from "bullmq";
 import fs from "fs";
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { QdrantVectorStore } from "@langchain/qdrant";
+import { createEmbeddings, createVectorStore, deleteFile } from "./utils.js";
 import { Document } from "@langchain/core/documents";
 import { QdrantClient } from "@qdrant/js-client-rest";
 
@@ -23,33 +22,11 @@ const worker = new Worker(
     const pdfLoader = new PDFLoader(path);
     const rawDocs = await pdfLoader.load();
 
-    console.log("Raw documents:", JSON.stringify(rawDocs, null, 2));
-    console.log("Number of documents:", rawDocs.length);
-
-    const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1000,
-      chunkOverlap: 100,
-    });
-    const chunkedDocs = await textSplitter.splitDocuments(rawDocs);
-
-    console.log("Chunked documents:", JSON.stringify(chunkedDocs));
-
-    const qdrantClient = new QdrantClient({ host: "localhost", port: 6333 });
-    const embeddings = new GoogleGenerativeAIEmbeddings({
-      apiKey: process.env.GEMINI_API_KEY,
-      model: "text-embedding-004",
-    });
-
-    const vectorStore = await QdrantVectorStore.fromExistingCollection(
-      embeddings,
-      {
-        url: process.env.QDRANT_URL,
-        collectionName: "pdf-docs",
-      }
-    );
-
+    const embeddings = createEmbeddings();
+    const vectorStore = await createVectorStore(embeddings);
     await vectorStore.addDocuments(chunkedDocs);
     console.log("Documents added to Qdrant");
+    deleteFile(path);
 
     if (path) {
       fs.unlink(path, (err) => {
