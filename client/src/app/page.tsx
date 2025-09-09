@@ -2,6 +2,8 @@
 "use client";
 import { useRef, useState } from "react";
 import { FiTrash2 } from "react-icons/fi";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 type Message = {
   role: "user" | "model";
@@ -80,6 +82,7 @@ export default function Home() {
       }
     } catch (err) {
       // Optionally handle error
+      console.error("Chat request failed:", err);
     }
     setSending(false);
     setChatInput("");
@@ -99,13 +102,9 @@ export default function Home() {
             ref={fileInputRef}
             disabled={uploading}
           />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            disabled={uploading}
-          >
+          <Button type="submit" disabled={uploading}>
             {uploading ? "Uploading..." : "Upload"}
-          </button>
+          </Button>
         </form>
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-2 text-white">Uploaded Files</h3>
@@ -116,14 +115,15 @@ export default function Home() {
               uploadedFiles.map((file, idx) => (
                 <li key={idx} className="text-zinc-300 flex items-center justify-between">
                   <span>{file}</span>
-                  <button
+                  <Button
                     type="button"
-                    className="ml-2 text-red-500 hover:text-red-700"
+                    variant="ghost"
+                    className="ml-2 text-red-500 hover:text-red-700 p-1"
                     onClick={() => handleDelete(file)}
                     title="Delete document"
                   >
                     <FiTrash2 size={18} />
-                  </button>
+                  </Button>
                 </li>
               ))
             )}
@@ -140,10 +140,31 @@ export default function Home() {
           ) : (
             <ul className="space-y-4">
               {messages.map((msg, idx) => (
-                <li key={idx} className={msg.role === "user" ? "text-blue-400" : "text-green-400"}>
-                  <span className="block font-semibold mb-1">{msg.role === "user" ? "You" : "AI"}</span>
-                  <span className="whitespace-pre-line">{msg.content}</span>
-                </li>
+                msg.role === "user" ? (
+                  <li
+                    key={idx}
+                    className="flex items-start justify-end gap-3"
+                  >
+                    <div className="flex flex-col items-end max-w-[70%]">
+                      <span className="whitespace-pre-line text-blue-200 bg-zinc-700 rounded-lg px-4 py-2">{msg.content}</span>
+                    </div>
+                    <Avatar>
+                      <AvatarFallback className="bg-gray-600">U</AvatarFallback>
+                    </Avatar>
+                  </li>
+                ) : (
+                  <li
+                    key={idx}
+                    className="flex items-start justify-start gap-3"
+                  >
+                    <Avatar>
+                      <AvatarFallback className="bg-gray-600">AI</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col items-start max-w-[70%]">
+                      <span className="whitespace-pre-line text-green-200 bg-zinc-700 rounded-lg px-4 py-2">{msg.content}</span>
+                    </div>
+                  </li>
+                )
               ))}
             </ul>
           )}
@@ -157,13 +178,9 @@ export default function Home() {
             onChange={(e) => setChatInput(e.target.value)}
             disabled={sending}
           />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            disabled={sending}
-          >
+          <Button type="submit" disabled={sending}>
             {sending ? "Sending..." : "Send"}
-          </button>
+          </Button>
         </form>
       </section>
     </main>
