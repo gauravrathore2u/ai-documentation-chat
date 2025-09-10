@@ -18,10 +18,11 @@ export default function Home() {
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<FileMeta[]>([]);
   // Fetch files metadata on mount
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
   useEffect(() => {
     const fetchFiles = async () => {
       try {
-        const res = await fetch("http://localhost:8000/files", {
+        const res = await fetch(`${API_BASE_URL}/files`, {
           method: "GET",
           credentials: "include",
         });
@@ -47,7 +48,7 @@ export default function Home() {
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/file/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/file/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -71,7 +72,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file", files[i]);
       try {
-        const res = await fetch("http://localhost:8000/upload", {
+        const res = await fetch(`${API_BASE_URL}/upload`, {
           method: "POST",
           body: formData,
           credentials: "include",
@@ -99,7 +100,7 @@ export default function Home() {
     setMessages((prev) => [...prev, userMsg]);
     setSending(true);
     try {
-      const res = await fetch("http://localhost:8000/chat", {
+      const res = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: chatInput }),
@@ -116,7 +117,6 @@ export default function Home() {
     setSending(false);
     setChatInput("");
   };
-  console.log('uploadedFiles', uploadedFiles);
 
   return (
     <main className="min-h-screen flex flex-row bg-zinc-900">
