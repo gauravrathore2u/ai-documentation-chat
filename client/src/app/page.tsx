@@ -19,6 +19,7 @@ export default function Home() {
   const [uploadedFiles, setUploadedFiles] = useState<FileMeta[]>([]);
   // Fetch files metadata on mount
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
   useEffect(() => {
     const fetchFiles = async () => {
       try {
