@@ -15,8 +15,8 @@ export function createEmbeddings(
 
 export async function createVectorStore(
   embeddings,
-  url = process.env.QDRANT_URL,
-  collectionName = "pdf-docs"
+  collectionName = "pdf-docs",
+  url = process.env.QDRANT_URL
 ) {
   return await QdrantVectorStore.fromExistingCollection(embeddings, {
     url,

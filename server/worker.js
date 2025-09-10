@@ -3,14 +3,12 @@ import fs from "fs";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { createEmbeddings, createVectorStore, deleteFile } from "./utils.js";
-import { Document } from "@langchain/core/documents";
-import { QdrantClient } from "@qdrant/js-client-rest";
 
 const worker = new Worker(
   "file-upload",
   async (job) => {
     console.log("Job received:", job.id);
-    const { path } = job.data;
+    const { path, collectionName } = job.data;
 
     /**
      * read the pdf from the path
@@ -22,8 +20,14 @@ const worker = new Worker(
     const pdfLoader = new PDFLoader(path);
     const rawDocs = await pdfLoader.load();
 
+    const textSplitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 1000,
+      chunkOverlap: 100,
+    });
+    const chunkedDocs = await textSplitter.splitDocuments(rawDocs);
+
     const embeddings = createEmbeddings();
-    const vectorStore = await createVectorStore(embeddings);
+    const vectorStore = await createVectorStore(embeddings, collectionName);
     await vectorStore.addDocuments(chunkedDocs);
     console.log("Documents added to Qdrant");
     deleteFile(path);

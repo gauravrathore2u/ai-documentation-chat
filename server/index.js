@@ -1,4 +1,3 @@
-// Basic Express server with dotenv, cors, multer
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -8,6 +7,10 @@ import fs from "fs";
 import path from "path";
 import { createEmbeddings, createVectorStore, deleteFile } from "./utils.js";
 import { GoogleGenAI } from "@google/genai";
+import { addUserFile, getUserFiles, deleteUserFile } from "./valkey.js";
+import { QdrantClient } from "@qdrant/js-client-rest";
+import { clerkMiddleware, getAuth } from "@clerk/express";
+import cookieParser from "cookie-parser";
 
 dotenv.config();
 // BullMQ queue for file uploads
@@ -24,8 +27,15 @@ const upload = multer({
   dest: path.join(process.cwd(), "uploads"),
 });
 
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+  })
+);
 app.use(express.json());
+app.use(cookieParser());
+app.use(clerkMiddleware());
 
 app.get("/", (req, res) => {
   res.send("Server is running on port 8000");
@@ -34,30 +44,49 @@ app.get("/", (req, res) => {
 // Example file upload endpoint
 app.post("/upload", upload.single("file"), async (req, res) => {
   const uploadedFile = req.file;
+  const auth = getAuth(req);
+  const userId = auth.userId;
+  if (!userId) return res.status(401).json({ error: "Not authenticated" });
   if (!uploadedFile) {
     return res.status(400).json({ error: "No file uploaded" });
   }
   try {
+    const fileId = `${uploadedFile.filename}-${Date.now()}`;
+    const collectionName = `pdf-docs-${userId}`;
     // Add file info to BullMQ queue
     const job = await fileUploadQueue.add(
       "process",
       {
+        id: fileId,
         originalname: uploadedFile.originalname,
         filename: uploadedFile.filename,
         path: uploadedFile.path,
         destination: uploadedFile.destination,
         mimetype: uploadedFile.mimetype,
         size: uploadedFile.size,
+        userId,
+        collectionName,
       },
       {
         removeOnComplete: false,
         removeOnFail: false,
       }
     );
+    // Save file metadata in Valkey
+    const savedFile = {
+      id: fileId,
+      originalname: uploadedFile.originalname,
+      filename: uploadedFile.filename,
+      path: uploadedFile.path,
+      mimetype: uploadedFile.mimetype,
+      size: uploadedFile.size,
+      collectionName,
+    };
+    await addUserFile(userId, savedFile);
     console.log("Job added to BullMQ queue:", job.id);
     res.json({
       message: "File uploaded and queued successfully",
-      file: uploadedFile,
+      file: savedFile,
     });
   } catch (err) {
     deleteFile(uploadedFile?.path);
@@ -67,49 +96,107 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-app.post("/chat", async (req, res) => {
-  const userQuery = req.body.query;
-  const embeddings = createEmbeddings();
-  const vectorStore = await createVectorStore(embeddings);
-  const retriever = vectorStore.asRetriever({ k: 3 });
-  const retrieverResponse = await retriever.invoke(userQuery);
+// List files for logged-in user
+app.get("/files", async (req, res) => {
+  const auth = getAuth(req);
+  const userId = auth.userId;
+  if (!userId) return res.status(401).json({ error: "Not authenticated" });
+  try {
+    const files = await getUserFiles(userId);
+    res.json({ files });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Error fetching files", details: err.message });
+  }
+});
 
-  const SYSTEM_PROMPT = `
+// Delete file for user and remove from Qdrant
+app.delete("/file/:id", async (req, res) => {
+  const auth = getAuth(req);
+  const userId = auth.userId;
+  if (!userId) return res.status(401).json({ error: "Not authenticated" });
+  try {
+    const files = await getUserFiles(userId);
+    const file = files.find((f) => f.id === req.params.id);
+    if (!file) return res.status(404).json({ error: "File not found" });
+    // Delete file from disk
+    deleteFile(file.path);
+    // Remove vectors from Qdrant (assume vector IDs are stored in file.vectorIds)
+    const qdrantClient = new QdrantClient({ url: process.env.QDRANT_URL });
+    if (file.vectorIds && Array.isArray(file.vectorIds)) {
+      await qdrantClient.delete({
+        collection_name: file.collectionName,
+        points_selector: { point_ids: file.vectorIds },
+      });
+    }
+    // Remove file metadata from Valkey
+    await deleteUserFile(userId, req.params.id);
+    res.json({ message: "File and vectors deleted" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Error deleting file", details: err.message });
+  }
+});
+
+app.post("/chat", async (req, res) => {
+  try {
+    const auth = getAuth(req);
+    const userId = auth.userId;
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+
+    const userQuery = req.body.query;
+    const collectionName = `pdf-docs-${userId}`;
+    const embeddings = createEmbeddings();
+    const vectorStore = await createVectorStore(
+      embeddings,
+      collectionName,
+      process.env.QDRANT_URL
+    );
+    const retriever = vectorStore.asRetriever({ k: 3 });
+    const retrieverResponse = await retriever.invoke(userQuery);
+
+    const SYSTEM_PROMPT = `
   You are a helpful AI assistant who answers the user's query based on the context provided. Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. 
   context: 
   `;
 
-  const ai = new GoogleGenAI({});
+    const ai = new GoogleGenAI({});
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: [
-      {
-        role: "model",
-        parts: [
-          {
-            text: SYSTEM_PROMPT,
-          },
-        ],
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "model",
+          parts: [
+            {
+              text: SYSTEM_PROMPT,
+            },
+          ],
+        },
+        {
+          role: "user",
+          parts: [
+            {
+              text: `${retrieverResponse}\n\n${userQuery}`,
+            },
+          ],
+        },
+      ],
+      config: {
+        thinkingConfig: {
+          thinkingBudget: 0, // Disables thinking
+        },
       },
-      {
-        role: "user",
-        parts: [
-          {
-            text: `${retrieverResponse}\n\n${userQuery}`,
-          },
-        ],
-      },
-    ],
-    config: {
-      thinkingConfig: {
-        thinkingBudget: 0, // Disables thinking
-      },
-    },
-  });
-  console.log(response.text);
+    });
+    console.log(response.text);
 
-  return res.json({ response: response.text, docs: retrieverResponse });
+    return res.json({ response: response.text, docs: retrieverResponse });
+  } catch (error) {
+    console.error("Error in /chat:", error);
+    res.status(500).json({ error: "Error processing chat request" });
+  }
 });
 
 const PORT = process.env.PORT || 8000;
@@ -124,3 +211,13 @@ app.listen(PORT, () => {
       console.error("Failed to start BullMQ worker:", err);
     });
 });
+
+function getUserInfo(req) {
+  const auth = getAuth(req);
+  if (!auth.userId) return null;
+  return {
+    userId: auth.userId,
+    sessionId: auth.sessionId,
+    ...auth,
+  };
+}

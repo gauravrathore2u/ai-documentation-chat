@@ -1,10 +1,11 @@
 
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import { FiTrash2 } from "react-icons/fi";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import type { FileMeta } from "@/lib/types";
 
 type Message = {
   role: "user" | "model";
@@ -15,26 +16,47 @@ export default function Home() {
   const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<FileMeta[]>([]);
+  // Fetch files metadata on mount
+  useEffect(() => {
+    const fetchFiles = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/files", {
+          method: "GET",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const result = await res.json();
+          let files: FileMeta[] = [];
+          if (Array.isArray(result)) {
+            files = result;
+          } else if (result && Array.isArray(result.files)) {
+            files = result.files;
+          }
+          setUploadedFiles(files);
+        }
+      } catch (err) {
+        console.error("Failed to fetch files metadata:", err);
+      }
+    };
+    fetchFiles();
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
 
-  const handleDelete = async (filename: string) => {
+  const handleDelete = async (id: string) => {
     try {
-      const res = await fetch("http://localhost:8000/delete-doc", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ filename }),
+      const res = await fetch(`http://localhost:8000/file/${id}`, {
+        method: "DELETE",
+        credentials: "include",
       });
       if (res.ok) {
-        setUploadedFiles((prev) => prev.filter((f) => f !== filename));
+        setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
       }
     } catch (err) {
       // Optionally handle error
-      console.error("Delete failed for file:", filename, err);
+      console.error("Delete failed for file:", id, err);
     }
   };
 
@@ -44,7 +66,7 @@ export default function Home() {
     if (!files || files.length === 0) return;
 
     setUploading(true);
-    const uploaded: string[] = [];
+    const uploaded: FileMeta[] = [];
     for (let i = 0; i < files.length; i++) {
       const formData = new FormData();
       formData.append("file", files[i]);
@@ -52,9 +74,13 @@ export default function Home() {
         const res = await fetch("http://localhost:8000/upload", {
           method: "POST",
           body: formData,
+          credentials: "include",
         });
         if (res.ok) {
-          uploaded.push(files[i].name);
+          const result = await res.json();
+          if (result && result.file) {
+            uploaded.push(result.file);
+          }
         }
       } catch (err) {
         // Optionally handle error
@@ -77,6 +103,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: chatInput }),
+        credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();
@@ -89,6 +116,7 @@ export default function Home() {
     setSending(false);
     setChatInput("");
   };
+  console.log('uploadedFiles', uploadedFiles);
 
   return (
     <main className="min-h-screen flex flex-row bg-zinc-900">
@@ -115,17 +143,19 @@ export default function Home() {
               <li className="text-zinc-300">No files uploaded yet.</li>
             ) : (
               uploadedFiles.map((file, idx) => (
-                <li key={idx} className="text-zinc-300 flex items-center justify-between">
-                  <span>{file}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="ml-2 text-red-500 hover:text-red-700 p-1"
-                    onClick={() => handleDelete(file)}
-                    title="Delete document"
-                  >
-                    <FiTrash2 size={18} />
-                  </Button>
+                <li key={idx} className="text-zinc-300">
+                  <div className="flex items-center justify-between">
+                    <span>{file.originalname}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="ml-2 text-red-500 hover:text-red-700 p-1"
+                      onClick={() => handleDelete(file.id)}
+                      title="Delete document"
+                    >
+                      <FiTrash2 size={18} />
+                    </Button>
+                  </div>
                 </li>
               ))
             )}
