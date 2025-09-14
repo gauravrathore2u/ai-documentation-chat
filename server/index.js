@@ -2,7 +2,6 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import multer from "multer";
-import { Queue } from "bullmq";
 import fs from "fs";
 import path from "path";
 import { createEmbeddings, createVectorStore, deleteFile } from "./utils.js";
@@ -23,13 +22,6 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { randomUUID } from "crypto";
 
 dotenv.config();
-// BullMQ queue for file uploads
-const fileUploadQueue = new Queue("file-upload", {
-  connection: {
-    host: "localhost",
-    port: 6379,
-  },
-});
 
 const app = express();
 
@@ -282,14 +274,6 @@ app.post("/start-new-chat", async (req, res) => {
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
-  // Start BullMQ worker when server starts
-  import("./worker.js")
-    .then(() => {
-      console.log("BullMQ worker started with server.");
-    })
-    .catch((err) => {
-      console.error("Failed to start BullMQ worker:", err);
-    });
 });
 
 function getUserInfo(req) {
