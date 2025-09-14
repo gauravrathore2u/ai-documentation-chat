@@ -164,10 +164,27 @@ app.post("/chat", async (req, res) => {
     const retriever = vectorStore.asRetriever({ k: 3 });
     const retrieverResponse = await retriever.invoke(userQuery);
 
+    // Fetch previous chats for context
+    const previousChats = await getUserChats(userId);
+    let chatHistory = "";
+    if (previousChats.length > 0) {
+      chatHistory = previousChats
+        .map((chat, idx) => `User: ${chat.query}\nAI: ${chat.response}`)
+        .join("\n\n");
+    }
+
     const SYSTEM_PROMPT = `
-  You are a helpful AI assistant who answers the user's query based on the context provided. Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. 
-  context: 
-  `;
+You are a helpful AI assistant who answers the user's query based on the context provided. Use the following pieces of context and previous chat history to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer.
+
+context:
+${JSON.stringify(retrieverResponse)}
+
+Previous chat history:
+${chatHistory}
+
+Current user question:
+${userQuery}
+`;
 
     const ai = new GoogleGenAI({});
 
@@ -197,9 +214,9 @@ app.post("/chat", async (req, res) => {
         },
       },
     });
-    console.log(response.text);
+    console.log(SYSTEM_PROMPT);
 
-    // Save chat in Valkey with 1-day expiry
+    // Save chat in Valkey
     await saveUserChat(userId, {
       query: userQuery,
       response: response.text,

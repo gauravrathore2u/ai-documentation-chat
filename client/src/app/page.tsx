@@ -22,24 +22,15 @@ type ChatHistoryItem = {
 };
 
 export default function Home() {
+  const chatBoxRef = useRef<HTMLDivElement>(null);
   // Handler to start a new chat
-  const handleStartNewChat = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/start-new-chat`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (res.ok) {
-        setMessages([]);
-      }
-    } catch (err) {
-      console.error("Failed to start new chat:", err);
-    }
-  };
   const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<FileMeta[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [sending, setSending] = useState(false);
   // Fetch files metadata on mount
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -88,9 +79,13 @@ export default function Home() {
     fetchFiles();
     fetchChats();
   }, [API_BASE_URL]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [sending, setSending] = useState(false);
+
+
+  useEffect(() => {
+    if (chatBoxRef.current) {
+      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -164,6 +159,20 @@ export default function Home() {
     setChatInput("");
   };
 
+  const handleStartNewChat = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/start-new-chat`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error("Failed to start new chat:", err);
+    }
+  };
+
   return (
     <main className="min-h-screen flex flex-row bg-zinc-900">
       {/* Left Section: File Upload & List */}
@@ -222,7 +231,7 @@ export default function Home() {
             </span>
           </Tooltip>
         </h2>
-        <div className="flex-1 overflow-y-auto border border-zinc-700 rounded p-4 bg-zinc-800 mb-4">
+        <div ref={chatBoxRef} className="flex-1 border border-zinc-700 rounded p-4 bg-zinc-800 mb-4 overflow-y-auto max-h-[80vh]">
           {messages.length === 0 ? (
             <div className="text-zinc-400">No messages yet.</div>
           ) : (
