@@ -18,6 +18,9 @@ import {
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { clerkMiddleware, getAuth } from "@clerk/express";
 import cookieParser from "cookie-parser";
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { randomUUID } from "crypto";
 
 dotenv.config();
 // BullMQ queue for file uploads
@@ -60,29 +63,50 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     const fileId = `${uploadedFile.filename}-${Date.now()}`;
     const collectionName = `pdf-docs-${userId}`;
-    // Add file info to BullMQ queue
-    const job = await fileUploadQueue.add(
-      "process",
-      {
-        id: fileId,
-        originalname: uploadedFile.originalname,
-        filename: uploadedFile.filename,
-        path: uploadedFile.path,
-        destination: uploadedFile.destination,
-        mimetype: uploadedFile.mimetype,
-        size: uploadedFile.size,
-        userId,
-        collectionName,
-      },
-      {
-        removeOnComplete: false,
-        removeOnFail: false,
-      }
-    );
 
-    console.log("Job added to BullMQ queue:", job.id);
+    // PDF processing
+    const pdfLoader = new PDFLoader(uploadedFile.path);
+    const rawDocs = await pdfLoader.load();
+
+    const textSplitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 1000,
+      chunkOverlap: 100,
+    });
+    const chunkedDocs = await textSplitter.splitDocuments(rawDocs);
+
+    const embeddings = createEmbeddings();
+    const vectorStore = await createVectorStore(embeddings, collectionName);
+
+    // Assign explicit UUIDs to each chunk
+    const vectorIds = [];
+    chunkedDocs.forEach((doc) => {
+      const id = randomUUID();
+      doc.id = id;
+      vectorIds.push(id);
+    });
+    await vectorStore.addDocuments(chunkedDocs);
+    console.log("Documents added to Qdrant with IDs:", vectorIds);
+
+    // Save file metadata in Valkey
+    const fileMeta = {
+      id: fileId,
+      originalname: uploadedFile.originalname,
+      filename: uploadedFile.filename,
+      path: uploadedFile.path,
+      mimetype: uploadedFile.mimetype,
+      size: uploadedFile.size,
+      destination: uploadedFile.destination,
+      collectionName,
+      vectorIds,
+    };
+    await addUserFile(userId, fileMeta);
+
+    // Delete file from disk
+    deleteFile(uploadedFile.path);
+
     res.json({
-      message: "File uploaded and queued successfully",
+      message: "File uploaded and processed successfully",
+      file: fileMeta,
     });
   } catch (err) {
     deleteFile(uploadedFile?.path);
