@@ -1,6 +1,8 @@
 
 "use client";
 import { useRef, useState, useEffect } from "react";
+import { FiPlus } from "react-icons/fi";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useUser } from "@clerk/nextjs";
 import { FiTrash2 } from "react-icons/fi";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,7 +14,28 @@ type Message = {
   content: string;
 };
 
+type ChatHistoryItem = {
+  query: string;
+  response: string;
+  docs: string;
+  timestamp: number;
+};
+
 export default function Home() {
+  // Handler to start a new chat
+  const handleStartNewChat = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/start-new-chat`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error("Failed to start new chat:", err);
+    }
+  };
   const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -41,8 +64,30 @@ export default function Home() {
         console.error("Failed to fetch files metadata:", err);
       }
     };
+
+    const fetchChats = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/chats`, {
+          method: "GET",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const chatHistory: { chats: ChatHistoryItem[] } = await res.json();
+          // Map chat history to messages
+          const mappedMessages: Message[] = chatHistory.chats.flatMap(chat => [
+            { role: "user", content: chat.query },
+            { role: "model", content: chat.response }
+          ]);
+          setMessages(mappedMessages);
+        }
+      } catch (err) {
+        console.error("Failed to fetch chat history:", err);
+      }
+    };
+
     fetchFiles();
-  }, []);
+    fetchChats();
+  }, [API_BASE_URL]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -150,7 +195,7 @@ export default function Home() {
                     <Button
                       type="button"
                       variant="ghost"
-                      className="ml-2 text-red-500 hover:text-red-700 p-1"
+                      className="ml-2 text-red-500 hover:text-red-700 p-1 cursor-pointer"
                       onClick={() => handleDelete(file.id)}
                       title="Delete document"
                     >
@@ -166,7 +211,17 @@ export default function Home() {
 
       {/* Right Section: Chat Interface */}
       <section className="flex-1 flex flex-col p-8">
-        <h2 className="text-xl font-bold mb-4 text-white">Chat</h2>
+        <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
+          Chat
+          <Tooltip content="New chat">
+            <span
+              className="cursor-pointer"
+              onClick={handleStartNewChat}
+            >
+              <FiPlus size={22} />
+            </span>
+          </Tooltip>
+        </h2>
         <div className="flex-1 overflow-y-auto border border-zinc-700 rounded p-4 bg-zinc-800 mb-4">
           {messages.length === 0 ? (
             <div className="text-zinc-400">No messages yet.</div>
@@ -219,7 +274,7 @@ export default function Home() {
             onChange={(e) => setChatInput(e.target.value)}
             disabled={sending}
           />
-          <Button type="submit" disabled={sending}>
+          <Button type="submit" disabled={sending} className="cursor-pointer">
             {sending ? "Sending..." : "Send"}
           </Button>
         </form>

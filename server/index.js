@@ -7,7 +7,14 @@ import fs from "fs";
 import path from "path";
 import { createEmbeddings, createVectorStore, deleteFile } from "./utils.js";
 import { GoogleGenAI } from "@google/genai";
-import { addUserFile, getUserFiles, deleteUserFile } from "./valkey.js";
+import {
+  addUserFile,
+  getUserFiles,
+  deleteUserFile,
+  saveUserChat,
+  getUserChats,
+  deleteAllUserChats,
+} from "./valkey.js";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { clerkMiddleware, getAuth } from "@clerk/express";
 import cookieParser from "cookie-parser";
@@ -192,10 +199,48 @@ app.post("/chat", async (req, res) => {
     });
     console.log(response.text);
 
+    // Save chat in Valkey with 1-day expiry
+    await saveUserChat(userId, {
+      query: userQuery,
+      response: response.text,
+      docs: retrieverResponse,
+      timestamp: Date.now(),
+    });
+
     return res.json({ response: response.text, docs: retrieverResponse });
   } catch (error) {
     console.error("Error in /chat:", error);
     res.status(500).json({ error: "Error processing chat request" });
+  }
+});
+
+// Route to get saved chats for user
+app.get("/chats", async (req, res) => {
+  const auth = getAuth(req);
+  const userId = auth.userId;
+  if (!userId) return res.status(401).json({ error: "Not authenticated" });
+  try {
+    const chats = await getUserChats(userId);
+    res.json({ chats });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Error fetching chats", details: err.message });
+  }
+});
+
+// Route to delete all previous chats for user
+app.post("/start-new-chat", async (req, res) => {
+  const auth = getAuth(req);
+  const userId = auth.userId;
+  if (!userId) return res.status(401).json({ error: "Not authenticated" });
+  try {
+    await deleteAllUserChats(userId);
+    res.json({ message: "All previous chats deleted" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Error deleting chats", details: err.message });
   }
 });
 
