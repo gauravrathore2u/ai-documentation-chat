@@ -121,6 +121,10 @@ export default function Home() {
         if (res.ok) {
           const result = await res.json();
           if (result && result.file) {
+            // If file name is not present, set it from the file itself
+            if (!result.file.originalname) {
+              result.file.originalname = files[i].name;
+            }
             uploaded.push(result.file);
           }
         }

@@ -3,6 +3,8 @@ import fs from "fs";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { createEmbeddings, createVectorStore, deleteFile } from "./utils.js";
+import { addUserFile } from "./valkey.js";
+import { randomUUID } from "crypto";
 
 const worker = new Worker(
   "file-upload",
@@ -28,10 +30,46 @@ const worker = new Worker(
 
     const embeddings = createEmbeddings();
     const vectorStore = await createVectorStore(embeddings, collectionName);
+
+    // Assign explicit IDs to each chunk
+    const vectorIds = [];
+    chunkedDocs.forEach((doc) => {
+      const id = randomUUID();
+      doc.id = id;
+      vectorIds.push(id);
+    });
+    // Add documents to Qdrant with explicit IDs
     await vectorStore.addDocuments(chunkedDocs);
     console.log("Documents added to Qdrant");
-    deleteFile(path);
 
+    // Save file metadata in Valkey
+    try {
+      const {
+        userId,
+        id: fileId,
+        originalname,
+        filename,
+        mimetype,
+        size,
+        destination,
+      } = job.data;
+      const fileMeta = {
+        id: fileId,
+        originalname,
+        filename,
+        path,
+        mimetype,
+        size,
+        destination,
+        collectionName,
+        vectorIds,
+      };
+      await addUserFile(userId, fileMeta);
+    } catch (err) {
+      console.error("Error saving file metadata in Valkey:", err);
+    }
+
+    deleteFile(path);
     if (path) {
       fs.unlink(path, (err) => {
         if (err) {

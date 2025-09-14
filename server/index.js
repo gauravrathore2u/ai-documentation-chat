@@ -79,21 +79,10 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         removeOnFail: false,
       }
     );
-    // Save file metadata in Valkey
-    const savedFile = {
-      id: fileId,
-      originalname: uploadedFile.originalname,
-      filename: uploadedFile.filename,
-      path: uploadedFile.path,
-      mimetype: uploadedFile.mimetype,
-      size: uploadedFile.size,
-      collectionName,
-    };
-    await addUserFile(userId, savedFile);
+
     console.log("Job added to BullMQ queue:", job.id);
     res.json({
       message: "File uploaded and queued successfully",
-      file: savedFile,
     });
   } catch (err) {
     deleteFile(uploadedFile?.path);
@@ -127,20 +116,25 @@ app.delete("/file/:id", async (req, res) => {
     const files = await getUserFiles(userId);
     const file = files.find((f) => f.id === req.params.id);
     if (!file) return res.status(404).json({ error: "File not found" });
-    // Delete file from disk
-    deleteFile(file.path);
+
     // Remove vectors from Qdrant (assume vector IDs are stored in file.vectorIds)
     const qdrantClient = new QdrantClient({ url: process.env.QDRANT_URL });
-    if (file.vectorIds && Array.isArray(file.vectorIds)) {
-      await qdrantClient.delete({
-        collection_name: file.collectionName,
-        points_selector: { point_ids: file.vectorIds },
+    if (
+      file.vectorIds &&
+      Array.isArray(file.vectorIds) &&
+      file.vectorIds.length > 0
+    ) {
+      await qdrantClient.delete(file.collectionName, {
+        points: file.vectorIds,
       });
+    } else {
+      console.log("No Qdrant vector IDs to delete for file", file.id);
     }
     // Remove file metadata from Valkey
     await deleteUserFile(userId, req.params.id);
     res.json({ message: "File and vectors deleted" });
   } catch (err) {
+    console.error("Error deleting file:", err);
     res
       .status(500)
       .json({ error: "Error deleting file", details: err.message });
