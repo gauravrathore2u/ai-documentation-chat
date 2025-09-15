@@ -191,9 +191,6 @@ ${JSON.stringify(retrieverResponse)}
 
 Previous chat history:
 ${chatHistory}
-
-Current user question:
-${userQuery}
 `;
 
     const ai = new GoogleGenAI({});
@@ -213,7 +210,7 @@ ${userQuery}
           role: "user",
           parts: [
             {
-              text: `${retrieverResponse}\n\n${userQuery}`,
+              text: userQuery,
             },
           ],
         },
