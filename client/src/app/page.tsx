@@ -187,7 +187,7 @@ export default function Home() {
             ref={fileInputRef}
             disabled={uploading}
           />
-          <Button type="submit" disabled={uploading}>
+          <Button type="submit" disabled={uploading} className="cursor-pointer">
             {uploading ? "Uploading..." : "Upload"}
           </Button>
         </form>

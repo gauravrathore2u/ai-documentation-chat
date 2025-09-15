@@ -1,52 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-This project uses Next.js (TypeScript, Tailwind CSS, ESLint, App Router) and will be integrated with Clerk for authentication.
+# AI PDF Chat Client
 
-## Authentication
+A modern Next.js frontend for secure, per-user PDF chat powered by Clerk authentication. This client interfaces with the AI PDF Chat backend to enable document upload, semantic search, and conversational AI over your PDFs.
 
-Clerk will be used for authentication. See below for integration steps.
+## Features
 
-### Clerk Integration Steps
-
-1. Install Clerk packages:
-   ```bash
-   npm install @clerk/nextjs
-   ```
-2. Follow Clerk docs to set up environment variables and wrap your app with ClerkProvider.
-3. Add authentication components (SignIn, SignUp, UserButton) as needed.
-
-Refer to Clerk documentation for more details: https://clerk.com/docs
+- **User authentication** via Clerk
+- **PDF upload** and management
+- **Chat interface** with context-aware AI responses
+- **Per-user file and chat history**
+- **Responsive, dark-themed UI**
+- **Integration with backend endpoints** for file, chat, and history
 
 ## Getting Started
 
-First, run the development server:
+1. **Install dependencies:**
+   ```sh
+   npm install
+   ```
+2. **Configure environment:**
+   - Create a `.env` file with:
+     ```
+     NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your-clerk-key
+     ```
+   - Ensure the backend is running and accessible at the specified API base URL.
+3. **Run the development server:**
+   ```sh
+   npm run dev
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Usage
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **Sign up or log in** using Clerk authentication.
+2. **Upload PDF files** using the left sidebar.
+3. **Start chatting** with the AI about your uploaded documents.
+4. **Delete files** or start a new chat session as needed.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/app/` — Main Next.js app, including layout and page components
+- `src/components/ui/` — UI primitives (Avatar, Button, Tooltip)
+- `src/lib/` — Shared types and utilities
+- `public/` — Static assets
+- `globals.css` — Global styles (Tailwind CSS)
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+- `NEXT_PUBLIC_API_BASE_URL` — Backend API URL
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — Clerk publishable key
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Backend Integration
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This client expects the backend (see `../server/README.md`) to provide endpoints for:
 
-## Deploy on Vercel
+- `POST /upload` — Upload PDF
+- `GET /files` — List user files
+- `DELETE /file/:id` — Delete file
+- `POST /chat` — Chat with context/history
+- `GET /chats` — List chat history
+- `POST /start-new-chat` — Delete all previous chats
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
