@@ -1,5 +1,8 @@
 import Redis from "ioredis";
-const redis = new Redis({ host: "localhost", port: 6379 });
+const redis = new Redis({
+  host: process.env.VALKEY_HOST,
+  port: process.env.VALKEY_PORT,
+});
 
 export async function addUserFile(userId, fileMeta) {
   // Store file metadata as JSON in a list for the user
