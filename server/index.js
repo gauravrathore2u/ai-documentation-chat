@@ -134,7 +134,10 @@ app.delete("/file/:id", async (req, res) => {
     if (!file) return res.status(404).json({ error: "File not found" });
 
     // Remove vectors from Qdrant (assume vector IDs are stored in file.vectorIds)
-    const qdrantClient = new QdrantClient({ url: process.env.QDRANT_URL });
+    const qdrantClient = new QdrantClient({
+      url: process.env.QDRANT_URL,
+      apiKey: process.env.QDRANT_API_KEY,
+    });
     if (
       file.vectorIds &&
       Array.isArray(file.vectorIds) &&

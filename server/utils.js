@@ -20,6 +20,7 @@ export async function createVectorStore(
 ) {
   return await QdrantVectorStore.fromExistingCollection(embeddings, {
     url,
+    apiKey: process.env.QDRANT_API_KEY,
     collectionName,
   });
 }
