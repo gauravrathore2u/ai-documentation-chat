@@ -1,8 +1,7 @@
 import Redis from "ioredis";
-const redis = new Redis({
-  host: process.env.VALKEY_HOST,
-  port: process.env.VALKEY_PORT,
-});
+import dotenv from "dotenv";
+dotenv.config();
+const redis = new Redis(process.env.VALKEY_URL);
 
 export async function addUserFile(userId, fileMeta) {
   // Store file metadata as JSON in a list for the user

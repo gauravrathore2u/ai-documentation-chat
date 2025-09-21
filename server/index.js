@@ -244,6 +244,8 @@ ${chatHistory}
 // Route to get saved chats for user
 app.get("/chats", async (req, res) => {
   const auth = getAuth(req);
+  console.log("Auth data:", auth);
+
   const userId = auth.userId;
   if (!userId) return res.status(401).json({ error: "Not authenticated" });
   try {
